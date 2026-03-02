@@ -27,7 +27,6 @@ class QueryAgent:
         """Remap Windows local path to current server path"""
         if not file_path:
             return file_path
-        # If it's a Windows path, extract just the filename and rebuild
         if 'C:\\' in file_path or 'C:/' in file_path:
             filename = os.path.basename(file_path.replace('\\', '/'))
             return os.path.join(Config.DOWNLOAD_DIR, filename)
@@ -37,6 +36,7 @@ class QueryAgent:
         start_time = time.time()
         self.conversation_history.append({"role": "user", "query": query})
         
+        # ✅ ALWAYS check contextual FIRST before strategy
         if self._is_contextual_query(query):
             result = self._handle_contextual_query(query, start_time)
         else:
@@ -61,13 +61,16 @@ class QueryAgent:
     def _is_contextual_query(self, query: str) -> bool:
         q = query.lower()
         contextual_triggers = [
-    'their resume', 'their cv', 'those candidates', 'these candidates',
-    'top 2', 'top 3', 'top 5', 'top 10', 'first', 'show them',
-    'these people', 'above candidates', 'from the list',
-    'top two', 'top three', 'top five', 'top ten',        # ✅ word numbers
-    'the top', 'candidates resume', 'candidates cv',       # ✅ generic refs
-    'show me the top', 'show the top', 'their files'       # ✅ show patterns
-]
+            'their resume', 'their cv', 'those candidates', 'these candidates',
+            'top 2', 'top 3', 'top 5', 'top 10', 'first', 'show them',
+            'these people', 'above candidates', 'from the list',
+            'top two', 'top three', 'top five', 'top ten',
+            'the top', 'candidates resume', 'candidates cv',
+            'show me the top', 'show the top', 'their files'
+        ]
+        # ✅ KEY FIX: If we have previous results AND query mentions resume/cv/file
+        if self.last_candidates_list and any(x in q for x in ['resume', 'cv', 'file']):
+            return True
         return any(trigger in q for trigger in contextual_triggers)
 
     def _handle_contextual_query(self, query: str, start_time: float):
@@ -76,9 +79,19 @@ class QueryAgent:
         
         q = query.lower()
         
+        # ✅ Handle both "top 2" and "top two"
+        word_to_num = {
+            'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+            'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10
+        }
+        
         num_match = re.search(r'top\s+(\d+)|first\s+(\d+)', q)
+        word_match = re.search(r'top\s+(one|two|three|four|five|six|seven|eight|nine|ten)', q)
+        
         if num_match:
             n = int(num_match.group(1) or num_match.group(2))
+        elif word_match:
+            n = word_to_num[word_match.group(1)]
         else:
             n = len(self.last_candidates_list)
         
@@ -91,12 +104,9 @@ class QueryAgent:
             try:
                 name_parts = candidate_name.split()
                 longest_part = max(name_parts, key=len) if name_parts else candidate_name
-                
                 sql = f"SELECT file_path FROM candidates WHERE LOWER(name) LIKE LOWER('%{longest_part}%') LIMIT 1"
                 df = pd.read_sql_query(sql, conn)
-                
                 if not df.empty:
-                    # ✅ FIXED: Remap Windows path to server path
                     fixed_path = self._fix_path(df.iloc[0]['file_path'])
                     file_paths.append(fixed_path)
             except:
@@ -105,7 +115,7 @@ class QueryAgent:
         conn.close()
         
         if not file_paths:
-            return f"❌ Could not find resume files for the requested candidates."
+            return "❌ Could not find resume files for the requested candidates."
         
         return f"FILE_FOUND:{'||'.join(file_paths)}"
 
@@ -113,10 +123,15 @@ class QueryAgent:
         q = query.lower()
         
         if "resume of" in q: return "FILE"
+        
         file_triggers = ['resume', 'cv', 'file', 'document', 'pdf']
         action_triggers = ['send', 'download', 'open', 'show', 'give', 'fetch']
-        if any(x in q for x in file_triggers) and any(x in q for x in action_triggers):
-            return "FILE"
+        
+        # ✅ KEY FIX: Don't treat as FILE if it's a "top N" contextual request
+        has_top = re.search(r'top\s+(\d+|two|three|four|five|six|seven|eight|nine|ten)', q)
+        if not has_top:
+            if any(x in q for x in file_triggers) and any(x in q for x in action_triggers):
+                return "FILE"
 
         sql_triggers = [
             'how many', 'count', 'total', 'list', 'top', 'find', 'who',
@@ -157,7 +172,6 @@ class QueryAgent:
             if df.empty:
                 return f"🔍 I looked for **{target_name}**, but found no file."
             
-            # ✅ FIXED: Remap Windows path to server path
             fixed_path = self._fix_path(df.iloc[0]['file_path'])
             return f"FILE_FOUND:{fixed_path}"
         except Exception as e:
