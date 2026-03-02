@@ -8,7 +8,6 @@ try:
 except ImportError:
     pass
 
-
 def _get_secret(key: str) -> str:
     """Get secret from env var first, then Streamlit secrets."""
     # Try env var first
@@ -23,7 +22,7 @@ def _get_secret(key: str) -> str:
             try:
                 import tomllib  # Python 3.11+
             except ImportError:
-                import tomli as tomllib  # fallback for older Python
+                import tomli as tomllib
             with open(secrets_path, "rb") as f:
                 secrets = tomllib.load(f)
             val = secrets.get(key)
@@ -66,6 +65,16 @@ class Config:
         if not key:
             raise ValueError("GROQ_API_KEY is not set in environment or Streamlit Secrets!")
         return key
+
+    # ✅ NEW: Pinecone
+    @staticmethod
+    def get_pinecone_key():
+        key = _get_secret("PINECONE_API_KEY")
+        if not key:
+            raise ValueError("PINECONE_API_KEY is not set in environment or Streamlit Secrets!")
+        return key
+
+    PINECONE_INDEX_NAME = "resume-index"
 
     MODEL_NAME = "llama-3.1-8b-instant"
     EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
