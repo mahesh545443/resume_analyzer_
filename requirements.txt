@@ -1,0 +1,15 @@
+streamlit
+pandas
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
+langchain
+langchain-community
+langchain-groq
+langchain-huggingface
+langchain-text-splitters
+faiss-cpu
+pypdf
+docx2txt
+tabulate
+python-dotenv
