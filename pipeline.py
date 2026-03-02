@@ -87,7 +87,7 @@ def run_pipeline():
             processed_count += 1
             
             # Rate Limit: 20s is high for Groq; 2-5s is usually safe for 8B models
-            time.sleep(2.0) 
+            time.sleep(10) 
             
         except Exception as e:
             logging.error(f"Failed on {filename}: {e}")

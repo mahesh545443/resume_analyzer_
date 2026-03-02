@@ -38,7 +38,7 @@ class ExtractionAgent:
         self.llm = ChatGroq(
             model="llama-3.1-8b-instant", 
             temperature=0,
-            api_key=Config.GROQ_API_KEY
+            api_key=Config.get_groq_key()
         )
 
     def extract(self, text: str):
@@ -128,19 +128,26 @@ class ExtractionAgent:
             # 1. Get Raw Response
             response = self.llm.invoke(prompt)
             raw_content = response.content
-            
+
             # 2. Clean Markdown (Remove ```json and ```)
             json_str = re.sub(r"```json|```", "", raw_content).strip()
-            
-            # 3. Parse JSON
+
+            # 3. ✅ Extract JSON object even if LLM adds extra text around it
+            json_match = re.search(r'\{.*\}', json_str, re.DOTALL)
+            if not json_match:
+                logging.error("❌ No JSON object found in response.")
+                return None
+            json_str = json_match.group()
+
+            # 4. Parse JSON
             data_dict = json.loads(json_str)
             
-            # 4. Validate with Pydantic
+            # 5. Validate with Pydantic
             validated_data = ResumeData(**data_dict)
             return validated_data
             
-        except json.JSONDecodeError:
-            logging.error("❌ LLM returned bad JSON. Skipping file.")
+        except json.JSONDecodeError as e:
+            logging.error(f"❌ LLM returned bad JSON: {e}")
             return None
         except ValidationError as e:
             logging.error(f"❌ Data Validation Failed: {e}")
@@ -158,13 +165,11 @@ class ExtractionAgent:
         
         for job in work_history:
             try:
-                # Parse Start Date
                 if len(job.start_date) == 4: 
                     start = datetime.strptime(f"{job.start_date}-01", "%Y-%m")
                 else: 
                     start = datetime.strptime(job.start_date, "%Y-%m")
                 
-                # Parse End Date
                 if job.end_date.lower() in ["present", "current", "now", "till date"]: 
                     end = datetime.now()
                 elif len(job.end_date) == 4: 
@@ -172,10 +177,8 @@ class ExtractionAgent:
                 else: 
                     end = datetime.strptime(job.end_date, "%Y-%m")
                 
-                # Calculate Duration
                 months = (end.year - start.year) * 12 + (end.month - start.month)
                 
-                # Minimum 1 month credit for any job listed
                 if months <= 0: months = 1
                 
                 total_months += months
