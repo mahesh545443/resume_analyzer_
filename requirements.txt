@@ -8,12 +8,11 @@ langchain-community
 langchain-groq
 langchain-huggingface
 langchain-text-splitters
-faiss-cpu
 pypdf
 docx2txt
 tabulate
 python-dotenv
 sentence-transformers
 tomli
-pinecone-client
+pinecone
 langchain-pinecone
