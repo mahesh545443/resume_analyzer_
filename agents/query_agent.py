@@ -1,6 +1,7 @@
 import pandas as pd
 import time
 import re
+import os
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from core.database import db
@@ -13,7 +14,7 @@ class QueryAgent:
         self.llm = ChatGroq(
             model="llama-3.1-8b-instant",
             temperature=0,
-            api_key=Config.get_groq_key()  # ✅ FIXED
+            api_key=Config.get_groq_key()
         )
         self.vector_db = VectorDB()
         
@@ -21,6 +22,16 @@ class QueryAgent:
         self.last_query_results = None
         self.last_candidates_list = []
         self.context_window = 5
+
+    def _fix_path(self, file_path: str) -> str:
+        """Remap Windows local path to current server path"""
+        if not file_path:
+            return file_path
+        # If it's a Windows path, extract just the filename and rebuild
+        if 'C:\\' in file_path or 'C:/' in file_path:
+            filename = os.path.basename(file_path.replace('\\', '/'))
+            return os.path.join(Config.DOWNLOAD_DIR, filename)
+        return file_path
 
     def process_query(self, query: str):
         start_time = time.time()
@@ -82,7 +93,9 @@ class QueryAgent:
                 df = pd.read_sql_query(sql, conn)
                 
                 if not df.empty:
-                    file_paths.append(df.iloc[0]['file_path'])
+                    # ✅ FIXED: Remap Windows path to server path
+                    fixed_path = self._fix_path(df.iloc[0]['file_path'])
+                    file_paths.append(fixed_path)
             except:
                 continue
         
@@ -91,7 +104,6 @@ class QueryAgent:
         if not file_paths:
             return f"❌ Could not find resume files for the requested candidates."
         
-        elapsed = round(time.time() - start_time, 2)
         return f"FILE_FOUND:{'||'.join(file_paths)}"
 
     def _decide_strategy(self, query: str) -> str:
@@ -139,9 +151,14 @@ class QueryAgent:
             df = pd.read_sql_query(sql, conn)
             conn.close()
             
-            if df.empty: return f"🔍 I looked for **{target_name}**, but found no file."
-            return f"FILE_FOUND:{df.iloc[0]['file_path']}"
-        except Exception as e: return f"⚠️ Error: {str(e)}"
+            if df.empty:
+                return f"🔍 I looked for **{target_name}**, but found no file."
+            
+            # ✅ FIXED: Remap Windows path to server path
+            fixed_path = self._fix_path(df.iloc[0]['file_path'])
+            return f"FILE_FOUND:{fixed_path}"
+        except Exception as e:
+            return f"⚠️ Error: {str(e)}"
 
     def _query_sql(self, query: str, start_time: float):
         schema_hint = """
@@ -166,10 +183,12 @@ class QueryAgent:
             self.last_candidates_list = df['name'].tolist() if 'name' in df.columns else []
             
             elapsed = round(time.time() - start_time, 2)
-            if df.empty: return f"❌ No matches found. (Time: {elapsed}s)"
+            if df.empty:
+                return f"❌ No matches found. (Time: {elapsed}s)"
             
             for col in ['name', 'total_experience', 'skills']:
-                if col not in df.columns: df[col] = "N/A"
+                if col not in df.columns:
+                    df[col] = "N/A"
 
             count = len(df)
             if count > 10:
@@ -183,7 +202,8 @@ class QueryAgent:
                 msg = "\n".join(lines)
 
             return msg + f"\n\n---\n*📊 Matches: {count} | ⏱️ Time: {elapsed}s | ✅ High Confidence*"
-        except Exception as e: return f"⚠️ SQL Error: {str(e)}"
+        except Exception as e:
+            return f"⚠️ SQL Error: {str(e)}"
 
     def _query_rag(self, query: str, start_time: float):
         target_name = self.llm.invoke(f"Extract Name from '{query}'. Return JUST the name.").content.strip()
@@ -207,11 +227,13 @@ class QueryAgent:
                 if not df.empty:
                     docs_content = f"Candidate: {df.iloc[0]['name']}\nText:\n{df.iloc[0]['full_text'][:3500]}"
                     is_targeted = True
-            except: pass
+            except:
+                pass
 
         if not docs_content:
             docs = self.vector_db.search(query, k=5)
-            if not docs: return "I couldn't find relevant details."
+            if not docs:
+                return "I couldn't find relevant details."
             docs_content = "\n".join([f"Candidate: {d.metadata.get('name')}\nText: {d.page_content}" for d in docs])
 
         elapsed = round(time.time() - start_time, 2)
