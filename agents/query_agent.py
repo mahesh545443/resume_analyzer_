@@ -61,10 +61,13 @@ class QueryAgent:
     def _is_contextual_query(self, query: str) -> bool:
         q = query.lower()
         contextual_triggers = [
-            'their resume', 'their cv', 'those candidates', 'these candidates',
-            'top 2', 'top 3', 'top 5', 'top 10', 'first', 'show them',
-            'these people', 'above candidates', 'from the list'
-        ]
+    'their resume', 'their cv', 'those candidates', 'these candidates',
+    'top 2', 'top 3', 'top 5', 'top 10', 'first', 'show them',
+    'these people', 'above candidates', 'from the list',
+    'top two', 'top three', 'top five', 'top ten',        # ✅ word numbers
+    'the top', 'candidates resume', 'candidates cv',       # ✅ generic refs
+    'show me the top', 'show the top', 'their files'       # ✅ show patterns
+]
         return any(trigger in q for trigger in contextual_triggers)
 
     def _handle_contextual_query(self, query: str, start_time: float):
