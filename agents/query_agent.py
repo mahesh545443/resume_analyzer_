@@ -59,16 +59,20 @@ class QueryAgent:
 
     def _is_contextual_query(self, query: str) -> bool:
         q = query.lower()
+        
         contextual_triggers = [
             'their resume', 'their cv', 'those candidates', 'these candidates',
-            'top 2', 'top 3', 'top 5', 'top 10', 'first', 'show them',
+            'top 2', 'top 3', 'top 5', 'top 10', 'show them',
             'these people', 'above candidates', 'from the list',
             'top two', 'top three', 'top five', 'top ten',
-            'the top', 'candidates resume', 'candidates cv',
+            'candidates resume', 'candidates cv',
             'show me the top', 'show the top', 'their files'
         ]
-        if self.last_candidates_list and any(x in q for x in ['resume', 'cv', 'file']):
+        
+        # ✅ Only trigger contextual if previous results exist AND asking for their files
+        if self.last_candidates_list and any(x in q for x in ['their resume', 'their cv', 'their file']):
             return True
+        
         return any(trigger in q for trigger in contextual_triggers)
 
     def _handle_contextual_query(self, query: str, start_time: float):
@@ -77,6 +81,7 @@ class QueryAgent:
         
         q = query.lower()
         
+        # Handle both "top 2" and "top two"
         word_to_num = {
             'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
             'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10
@@ -128,7 +133,7 @@ class QueryAgent:
             if any(x in q for x in file_triggers) and any(x in q for x in action_triggers):
                 return "FILE"
 
-        # ✅ PRIORITY 2: RAG - personal/descriptive queries BEFORE SQL
+        # PRIORITY 2: RAG - personal/descriptive queries BEFORE SQL
         rag_priority = [
             'tell me about', 'describe', 'summarize', 'explain',
             'what did', 'responsibilities', 'work history', 'projects of',
@@ -146,7 +151,7 @@ class QueryAgent:
         if any(x in q for x in sql_triggers):
             return "SQL"
 
-        # PRIORITY 4: RAG - fallback for concept queries
+        # PRIORITY 4: RAG fallback
         rag_concepts = [
             'project', 'projects', 'context', 'summary',
             'tell me', 'what', 'how', 'why'
