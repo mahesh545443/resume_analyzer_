@@ -23,7 +23,7 @@ class Config:
     
     # === AI MODELS ===
     # Using your Groq Key
-    GROQ_API_KEY = "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"
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
     
     MODEL_NAME = "llama-3.1-8b-instant"
     EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
