@@ -36,7 +36,6 @@ class QueryAgent:
         start_time = time.time()
         self.conversation_history.append({"role": "user", "query": query})
         
-        # ✅ ALWAYS check contextual FIRST before strategy
         if self._is_contextual_query(query):
             result = self._handle_contextual_query(query, start_time)
         else:
@@ -68,7 +67,6 @@ class QueryAgent:
             'the top', 'candidates resume', 'candidates cv',
             'show me the top', 'show the top', 'their files'
         ]
-        # ✅ KEY FIX: If we have previous results AND query mentions resume/cv/file
         if self.last_candidates_list and any(x in q for x in ['resume', 'cv', 'file']):
             return True
         return any(trigger in q for trigger in contextual_triggers)
@@ -79,7 +77,6 @@ class QueryAgent:
         
         q = query.lower()
         
-        # ✅ Handle both "top 2" and "top two"
         word_to_num = {
             'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
             'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10
@@ -122,31 +119,37 @@ class QueryAgent:
     def _decide_strategy(self, query: str) -> str:
         q = query.lower()
         
+        # PRIORITY 1: FILE - specific resume request
         if "resume of" in q: return "FILE"
-        
         file_triggers = ['resume', 'cv', 'file', 'document', 'pdf']
         action_triggers = ['send', 'download', 'open', 'show', 'give', 'fetch']
-        
-        # ✅ KEY FIX: Don't treat as FILE if it's a "top N" contextual request
         has_top = re.search(r'top\s+(\d+|two|three|four|five|six|seven|eight|nine|ten)', q)
         if not has_top:
             if any(x in q for x in file_triggers) and any(x in q for x in action_triggers):
                 return "FILE"
 
+        # ✅ PRIORITY 2: RAG - personal/descriptive queries BEFORE SQL
+        rag_priority = [
+            'tell me about', 'describe', 'summarize', 'explain',
+            'what did', 'responsibilities', 'work history', 'projects of',
+            'background of', 'profile of', 'details of', 'about'
+        ]
+        if any(x in q for x in rag_priority):
+            return "RAG"
+
+        # PRIORITY 3: SQL - counts, lists, filters
         sql_triggers = [
             'how many', 'count', 'total', 'list', 'top', 'find', 'who',
             'experience', 'exp', 'years', 'yrs', 'skills', 'candidates',
             'shortlist', 'names', 'category', 'categories'
         ]
         if any(x in q for x in sql_triggers):
-            if "describe" in q or "summarize" in q:
-                return "RAG"
             return "SQL"
 
+        # PRIORITY 4: RAG - fallback for concept queries
         rag_concepts = [
-            'project', 'projects', 'describe', 'summarize', 'explain',
-            'details', 'tell me about', 'summary', 'context', 'what did',
-            'responsibilities', 'work history'
+            'project', 'projects', 'context', 'summary',
+            'tell me', 'what', 'how', 'why'
         ]
         if any(x in q for x in rag_concepts):
             return "RAG"
